@@ -60,7 +60,7 @@ HMAC_KEY = bytes.fromhex("你的 12 字节密钥的 hex")
 
 # 方式二：从环境变量读取
 import os
-HMAC_KEY = bytes.fromhexos.environ.get("QQMUSIC_HMAC_KEY", ""))
+HMAC_KEY = bytes.fromhex(os.environ.get("QQMUSIC_HMAC_KEY", ""))
 ```
 
 ## 自检结果
