@@ -1,0 +1,1 @@
+# qqmusic-network-signature-algorithm
