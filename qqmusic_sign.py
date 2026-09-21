@@ -43,8 +43,16 @@ import uuid
 DELTA = 0x9E3779B9
 TEA_ROUNDS = 16
 
-# HMAC-SHA1 密钥（12 字节，逆向自 libmer.so）
-HMAC_KEY = bytes.fromhex("064646313aefb0870e364133")
+# HMAC-SHA1 密钥（12 字节）
+#
+# ⚠️ 密钥已移除 —— 原值逆向自客户端 libmer.so，属于第三方私有实现，
+#    出于合规考虑不在此公开。请自行分析客户端获取后填入：
+#
+#        HMAC_KEY = bytes.fromhex("你的 12 字节密钥的 hex")
+#
+#    未填入时：TEA-CBC / UDID / M-Value 等部分照常可用；
+#    calc_sign() 与 `sign` 子命令会抛出 RuntimeError 提示。
+HMAC_KEY = bytes.fromhex("")        # ← 自行填入（见上）
 
 
 # ============================================================
@@ -195,6 +203,11 @@ def calc_sign(raw_body: bytes, nonce: bytes | None = None) -> str:
     """
     sign = base64( nonce(12B) + HMAC-SHA1(key, reversed(base64(body))) )
     """
+    if not HMAC_KEY:
+        raise RuntimeError(
+            "HMAC_KEY 未设置：本仓库不包含该 12 字节密钥，"
+            "请自行分析客户端获取后填入 qqmusic_sign.py 顶部的 HMAC_KEY"
+        )
     rev_b64 = base64.b64encode(raw_body).decode("ascii")[::-1]
     mac = hmac.new(HMAC_KEY, rev_b64.encode("ascii"), hashlib.sha1).digest()
     return base64.b64encode((nonce or __import__("os").urandom(12)) + mac).decode("ascii")
@@ -225,11 +238,14 @@ def _selftest() -> int:
     chk(len(mv) > 20, f"compute_m_value 输出 base64 ({len(mv)} 字符)")
 
     body = b'{"comm":{"ct":11}}'
-    sign = calc_sign(body, nonce=b"\x00" * 12)
     mask = calc_mask(body)
-    chk(len(base64.b64decode(sign)) == 32, "sign = 12B nonce + 20B HMAC-SHA1 = 32 字节")
     chk(len(mask) == 32, "mask = md5 hex 32 字符")
-    chk(calc_sign(body, nonce=b"\x00" * 12) == sign, "同 nonce 下 sign 可复现")
+    if HMAC_KEY:
+        sign = calc_sign(body, nonce=b"\x00" * 12)
+        chk(len(base64.b64decode(sign)) == 32, "sign = 12B nonce + 20B HMAC-SHA1 = 32 字节")
+        chk(calc_sign(body, nonce=b"\x00" * 12) == sign, "同 nonce 下 sign 可复现")
+    else:
+        print("  SKIP sign 相关检查 —— HMAC_KEY 未设置（需自行填入，见 README）")
 
     # TEA-CBC: 同种子下输出一致；长度符合布局
     ct = tea_cbc_encrypt(b"hello qqmusic", b"0123456789abcdef", random.Random(7))
