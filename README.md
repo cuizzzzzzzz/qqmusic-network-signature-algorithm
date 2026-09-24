@@ -104,7 +104,7 @@ PASS TEA-CBC 输出为 8 的倍数 (24)
 
 ## 相关项目
 
-- **[qqmusic-music-dectypt-algorithm](https://github.com/cuizzzzzzzz/qqmusic-music-dectypt-algorithm)**
+- **[qqmusic-music-decrypt-algorithm](https://github.com/cuizzzzzzzz/qqmusic-music-decrypt-algorithm)**
   —— 同一个安卓客户端的**加密音频文件解密**（QMC / ekey / RC4 变体密钥流）
 
 ## 免责声明
