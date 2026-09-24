@@ -1,12 +1,15 @@
-# QQ 音乐 安卓客户端 网络签名算法 · QQMusic Android Client Signature
+**English** · [简体中文](README.zh-CN.md)
 
-> ### 📱 这是**手机端（Android 客户端）**的逆向实现
-> 逆向自 Android App 的 **`libmer.so`（MERJni）**，包含 TEA-CBC 加密、设备指纹（OpenUDID / M-Value）
-> 与请求签名（HMAC-SHA1）。
+# QQ Music Android Client — Request Signature
+
+> ### 📱 This is the **mobile (Android client)** implementation
+> Derived from the Android app's **`libmer.so` (MERJni)**: TEA-CBC encryption, device fingerprinting
+> (OpenUDID / M-Value) and request signing (HMAC-SHA1).
 >
-> ⚠️ **与网上其他 QQ 音乐签名项目的区别**：公开项目**绝大多数是 Web / PC 端**（网页版接口的
-> `sign` 计算、PC 客户端的 `musicu.fcg` 请求签名）。本项目是**移动端 App** 的签名链路，
-> 参数名（`authst` / `wxrefresh_token` / `tmeLoginType`…）、设备指纹与密钥**都不同**。
+> ⚠️ **How this differs from other public QQ Music signing projects**: most public projects target the
+> **web / PC client** (web endpoint `sign` computation, PC-client `musicu.fcg` signing). This project
+> covers the **mobile app's** signing chain — parameter names (`authst` / `wxrefresh_token` /
+> `tmeLoginType` …), device fingerprint and keys are **all different**.
 
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![Dependencies](https://img.shields.io/badge/dependencies-stdlib_only-success)
@@ -15,62 +18,55 @@
 
 ---
 
-## 这是什么
+## What this is
 
-QQ 音乐安卓客户端在调用其私有接口时，会对请求体做一套签名与设备指纹处理：
+The QQ Music Android client signs every private-API request and attaches device fingerprints:
 
-| 部分 | 客户端实现 | 本仓库函数 |
+| Part | Client implementation | Function here |
 |---|---|---|
-| TEA-CBC 加密 | `QqTeaCryptor.encrypt()` | `tea_cbc_encrypt()` |
-| M-Encoding | 5 字节随机前缀 + Deflate | `m_encode_body()` |
-| 设备 OpenUDID | `EkeyApiClient.computeUdID()` | `compute_udid()` |
+| TEA-CBC encryption | `QqTeaCryptor.encrypt()` | `tea_cbc_encrypt()` |
+| M-Encoding | 5 random bytes + Deflate | `m_encode_body()` |
+| Device OpenUDID | `EkeyApiClient.computeUdID()` | `compute_udid()` |
 | M-Value | `EkeyApiClient.computeMValue()` | `compute_m_value()` |
-| 请求签名 | `MERJni.calc()` | `calc_sign()` / `calc_mask()` |
+| Request signature | `MERJni.calc()` | `calc_sign()` / `calc_mask()` |
 
-**移动端特征**：TEA-CBC 用的是 QQ 的**私有变体**——链接时用的 IV 是"异或后的**输入块**"而不是
-标准 CBC 的密文块；首块与全零 IV 异或，输出时再异或一次。
+**Mobile-specific quirk**: the TEA-CBC chaining IV is the *XOR-ed **input** block* rather than the
+standard CBC ciphertext block; the first block is XOR-ed with an all-zero IV, and the output is XOR-ed
+once more.
 
-## ⚠️ 关于 HMAC 签名密钥（本仓库不含，需自行获取）
+## ⚠️ About the HMAC signing key (not included — bring your own)
 
-代码中**不包含**用于请求签名的 12 字节 HMAC-SHA1 密钥。它原本逆向自 `libmer.so`，属于第三方
-私有实现的一部分，出于合规考虑**本仓库不公开该密钥** —— 文件顶部只保留一个空变量：
-
-```python
-HMAC_KEY = bytes.fromhex("")   # ← 请自行填入
-```
-
-填入方式（任选其一）：
+This repository does **not** contain the 12-byte HMAC-SHA1 key used for request signing. It was
+originally extracted from `libmer.so`, which is part of a third-party private implementation, so it is
+**deliberately not published** here. The file keeps an empty placeholder:
 
 ```python
-# 方式一：直接改文件顶部
-HMAC_KEY = bytes.fromhex("你的 12 字节密钥的 hex")
-
-# 方式二：从环境变量读取
-HMAC_KEY = bytes.fromhex(os.environ.get("QQMUSIC_HMAC_KEY", ""))
+# top of qqmusic_sign.py
+HMAC_KEY = ...   # ← put your own 12-byte key (hex string) here
 ```
 
-未填入时：
+Without it:
 
-| 功能 | 状态 |
+| Feature | State |
 |---|---|
-| TEA-CBC 加密 / M-Encoding / OpenUDID / M-Value | ✅ 照常可用 |
-| `mask` 计算（MD5） | ✅ 照常可用 |
-| `calc_sign()` / `sign` 子命令 | ❌ 抛出 `RuntimeError` 提示需填入密钥 |
-| 自检中的 sign 检查项 | ⏭️ 显示 `SKIP` |
+| TEA-CBC / M-Encoding / OpenUDID / M-Value | ✅ works |
+| `mask` (MD5) | ✅ works |
+| `calc_sign()` / `sign` subcommand | ❌ raises `RuntimeError` asking for the key |
+| sign-related self-tests | ⏭️ reported as `SKIP` |
 
-## 用法
+## Usage
 
 ```bash
 git clone https://github.com/cuizzzzzzzz/qqmusic-network-signature-algorithm.git
 cd qqmusic-network-signature-algorithm
 
-python3 qqmusic_sign.py selftest               # 自检（确定性输出）
-python3 qqmusic_sign.py udid  <android_id>     # 算 OpenUDID
-python3 qqmusic_sign.py mvalue <android_id>    # 算 M-Value
-python3 qqmusic_sign.py sign  <body文件>       # 算请求签名 sign + mask（需自备 HMAC_KEY）
+python3 qqmusic_sign.py selftest               # self-test (deterministic)
+python3 qqmusic_sign.py udid  <android_id>     # compute OpenUDID
+python3 qqmusic_sign.py mvalue <android_id>    # compute M-Value
+python3 qqmusic_sign.py sign  <body-file>      # compute sign + mask (needs your HMAC_KEY)
 ```
 
-作为库调用：
+As a library:
 
 ```python
 from qqmusic_sign import calc_sign, calc_mask, compute_udid, compute_m_value
@@ -78,36 +74,36 @@ from qqmusic_sign import calc_sign, calc_mask, compute_udid, compute_m_value
 sign, mask = calc_sign(raw_body), calc_mask(raw_body)
 ```
 
-**环境要求**：Python 3.8+，**无第三方依赖**。
+**Requirements**: Python 3.8+, **no third-party dependencies**.
 
-## 自检结果
+## Self-test
 
 ```
 $ python3 qqmusic_sign.py selftest
-PASS compute_udid 返回 32 位 hex
-PASS compute_m_value 输出 base64 (108 字符)
-PASS mask = md5 hex 32 字符
-SKIP sign 相关检查 —— HMAC_KEY 未设置（需自行填入）
-PASS TEA-CBC 输出为 8 的倍数 (24)
+PASS compute_udid returns 32-char hex
+PASS compute_m_value returns base64 (108 chars)
+PASS mask = md5 hex, 32 chars
+SKIP sign checks — HMAC_KEY not set (bring your own)
+PASS TEA-CBC output is a multiple of 8 (24)
 
-自检: 全部通过 ✅
+self-test: all passed
 ```
 
-> 填入自己的 HMAC_KEY 后，`SKIP` 的检查项会变为 `PASS`。
+> Once you fill in your own HMAC_KEY, the `SKIP` checks turn into `PASS`.
 
-## 关键词 / Keywords
+## Keywords
 
-`QQ音乐签名` `签名算法` `安卓客户端` `移动端逆向` `libmer` `TEA` `TEA-CBC` `OpenUDID` `M-Value`
-`设备指纹` `HMAC-SHA1` `请求签名`
-`QQMusic signature` `Android reverse engineering` `libmer.so` `TEA encryption` `OpenUDID`
-`device fingerprint` `HMAC-SHA1 sign` `Tencent Music` `TME` `meri JNI`
+`QQMusic signature` `signature algorithm` `Android reverse engineering` `libmer.so` `meri JNI`
+`TEA` `TEA-CBC` `OpenUDID` `M-Value` `device fingerprint` `HMAC-SHA1` `request signing`
+`Tencent Music` `TME` `mobile client` `QQ音乐签名`
 
-## 相关项目
+## Related projects
 
 - **[qqmusic-music-decrypt-algorithm](https://github.com/cuizzzzzzzz/qqmusic-music-decrypt-algorithm)**
-  —— 同一个安卓客户端的**加密音频文件解密**（QMC / ekey / RC4 变体密钥流）
+  — encrypted audio decryption of the same Android client (QMC / ekey / segmented RC4 keystream)
 
-## 免责声明
+## Disclaimer
 
-本项目仅用于**安全研究与协议学习**。请勿用于破解付费内容、绕过版权保护或任何商业用途。
-本项目不含任何网络请求代码，也不提供任何密钥。因使用本项目产生的一切后果由使用者自负。
+This project is for **security research and protocol study only**. Do not use it to break paid
+content, bypass copyright protection, or for any commercial purpose. It contains **no network code**
+and **no keys**. Use at your own risk.
